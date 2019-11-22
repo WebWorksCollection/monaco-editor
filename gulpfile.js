@@ -7,7 +7,8 @@ const fs = require('fs');
 const rimraf = require('rimraf');
 const cp = require('child_process');
 const os = require('os');
-const httpServer = require('http-server');
+const yaserver = require('yaserver');
+const http = require('http');
 const typedoc = require("gulp-typedoc");
 const CleanCSS = require('clean-css');
 const uncss = require('uncss');
@@ -315,6 +316,8 @@ function ESM_pluginStream(plugin, destinationPath) {
 					);
 				}
 			}
+
+			contents = contents.replace(/\/\/# sourceMappingURL=.*((\r?\n)|$)/g, '');
 
 			data.contents = Buffer.from(contents);
 			this.emit('data', data);
@@ -831,8 +834,26 @@ const generateTestSamplesTask = function() {
 	fs.writeFileSync(path.join(__dirname, 'test/playground.generated/index.html'), index.join('\n'));
 };
 
+function createSimpleServer(rootDir, port) {
+	yaserver.createServer({
+		rootDir: rootDir
+	}).then((staticServer) => {
+		const server = http.createServer((request, response) => {
+			return staticServer.handle(request, response);
+		});
+		server.listen(port, '127.0.0.1', () => {
+			console.log(`Running at http://127.0.0.1:${port}`);
+		});
+	});
+}
+
 gulp.task('simpleserver', taskSeries(generateTestSamplesTask, function() {
-	httpServer.createServer({ root: '../', cache: 5 }).listen(8080);
-	httpServer.createServer({ root: '../', cache: 5 }).listen(8088);
-	console.log('LISTENING on 8080 and 8088');
+	const SERVER_ROOT = path.normalize(path.join(__dirname, '../'));
+	createSimpleServer(SERVER_ROOT, 8080);
+	createSimpleServer(SERVER_ROOT, 8088);
+}));
+
+gulp.task('ciserver', taskSeries(generateTestSamplesTask, function () {
+	const SERVER_ROOT = path.normalize(path.join(__dirname, './'));
+	createSimpleServer(SERVER_ROOT, 8080);
 }));
